@@ -531,6 +531,118 @@ class: center, middle, title-slide
 
 ---
 
+# 🤖 Type as an API
+
+The programmer writes the type _manually_
+
+.code80[
+```haskell
+type UserAPI
+  =    "users" :> Get '[JSON] [User]
+  :<|> "user"  :> Capture "user_id" Int
+               :> Get '[JSON] User 
+```
+]
+
+--
+
+👍 Easy to understand
+
+👎 Difficult to share, you need packages such as `servant-js`/`elm` to create clients
+
+---
+
+# ![Mu](images/sidebar-haskell.svg) Import the service definition
+
+.code60[
+```haskell
+{-# language TemplateHaskell #-}
+
+grpc "Schema" (const "Service") "helloworld.proto"
+```
+]
+
+--
+
+which results in schema definitions...
+
+.code50[
+```haskell
+type QuickstartSchema
+  = '[ 'DRecord "HelloRequest"
+                '[ 'FieldDef "name"    ('TPrimitive T.Text) ]
+     , 'DRecord "HelloResponse"
+                '[ 'FieldDef "message" ('TPrimitive T.Text) ] ]
+
+type instance AnnotatedSchema ProtoBufAnnotation QuickstartSchema
+  = '[ 'AnnField "HelloRequest"  "name"    ('ProtoBufId 1)
+     , 'AnnField "HelloResponse" "message" ('ProtoBufId 1) ]
+```
+]
+
+---
+
+# ![Mu](images/sidebar-haskell.svg) Import the service definition
+
+.code60[
+```haskell
+{-# language TemplateHaskell #-}
+
+grpc "Schema" (const "Service") "helloworld.proto"
+```
+]
+
+... and service definitions
+
+.code50[
+```haskell
+type QuickstartService
+  = 'Service "Greeter"
+      '[ 'Method "SayHello" '[]
+        '[ 'ArgSingle 'Nothing '[]
+             ('FromSchema QuickstartSchema "HelloRequest") ]
+        ('RetSingle ('FromSchema QuickstartSchema "HelloResponse")) ]
+```
+]
+
+Way more complex than Servant!
+
+---
+
+# ![Mu](images/sidebar-haskell.svg) Schema-first
+
+👍 Better for sharing across teams
+
+- Well-established gRPC and GraphQL clients
+
+👍 The schema/service definition API is hidden
+
+- We have changed it in every major release without changes to the examples
+
+👎 Inspectability and error reporting
+
+---
+
+# 🤖 ⚔️ ![Mu](images/sidebar-haskell.svg) Single vs. multi-protocol
+
+🤖 Focus on HTTP-oriented protocols <br />
+![Mu](images/sidebar-haskell.svg) The same code for different protocols
+
+--
+
+## ![Mu](images/sidebar-haskell.svg) Does one size fit all?
+
+.margin-top[.less-line-height[
+👍 No (user) code to move to another protocol
+
+👎 Hard to diagnose when this is not possible
+
+- RPC protocols differ way more than serialization formats
+
+]]
+
+---
+
 class: center, middle, title-slide
 
 # 🤖 🤝 ![Mu](images/sidebar-haskell.svg)
