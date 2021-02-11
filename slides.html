@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Servant vs. Mu: A Type-Level Battle</title>
+    <meta charset="utf-8">
+    <style>
+      /* @import url(https://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
+      @import url(https://fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic);
+      @import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic); */
+      @import url(css/metropolis.css);
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+class: center, middle, title-slide
+count: false
+
+# Servant vs. Mu <br /> .grey[A Type-Level Battle]
+
+## Alejandro Serrano @ BOB 2021
+
+.less-line-height[
+.grey[🐦 @trupill - 👨‍💻 47 Degrees (Academy)]
+]
+
+---
+
+# Servant and Mu
+
+Sets of libraries to develop services in Haskell
+
+--
+
+## 🤖 Servant - `servant.dev`
+
+.margin-top[
+- Focus on web services: REST, OpenAPI
+- Both client and server
+]
+
+--
+
+## ![Mu](images/sidebar-haskell.svg) Mu - `higherkindness.io/mu`
+
+.margin-top[
+- Microservices, multi-protocol: gRPC, GraphQL
+- Preceded by a Scala sibling
+]
+
+---
+
+# Why compare them?
+
+### Focus on a similar tech space
+
+.margin-top[
+- Choices for developing microservices
+- Even more when the protocol is still in flux
+]
+
+--
+
+### Both use _type-level techniques_
+
+Using lots of GHC extensions, and some more
+
+- Interesting exploration of the design space
+- How much of this is exposed to the user?
+
+---
+
+class: center, middle, title-slide
+
+# 👁️‍🗨️ Disclaimer
+
+## I am one of the core developers of Mu
+
+---
+
+class: center, middle, title-slide
+
+# 🤖 Servant - `servant.dev`
+
+---
+
+# Your API as a type
+
+.code80[
+```haskell
+type UserAPI
+  =    "users" :> Get '[JSON] [User]
+  :<|> "user"  :> Capture "user_id" Int
+               :> Get '[JSON] User 
+```
+]
+
+defines your API as two routes
+
+```
+GET /users
+GET /user/:user_id
+```
+
+---
+
+# Serving the API
+
+.code50[
+```haskell
+type UserAPI
+  =    "users" :> Get '[JSON] [User]
+  :<|> "user"  :> Capture "user_id" Int
+               :> Get '[JSON] User 
+```
+]
+
+You provide a `Handler` per route
+
+.code70[
+```haskell
+server :: Server UserAPI
+server = users :<|> user
+  where users :: Handler [User]
+        users = ...
+        user :: Int -> Handler User
+        user user_id = ...
+```
+]
+
+---
+
+# Serving the API
+
+.code70[
+```haskell
+server :: Server UserAPI
+server = users :<|> user
+  where users :: Handler [User]
+        users = ...
+        user :: Int -> Handler User
+        user user_id = ...
+```
+]
+
+`Handler` extends `IO` with the ability to stop
+
+```haskell
+type Handler = ExceptT ServerError IO
+```
+
+---
+
+# Serving the API
+
+.code70[
+```haskell
+server :: Server UserAPI
+server = users :<|> user
+  where users :: Handler [User]
+        users = ...
+        user :: Int -> Handler User
+        user user_id = ...
+```
+]
+
+Serialization is handled by the library
+
+- From string to `Int` in a URL part
+- Using Aeson's `ToJSON` for `User`
+
+---
+
+# Querying the API
+
+.code50[
+```haskell
+type UserAPI
+  =    "users" :> Get '[JSON] [User]
+  :<|> "user"  :> Capture "user_id" Int
+               :> Get '[JSON] User 
+```
+]
+
+Client code is automatically derived
+
+```haskell
+users :: ClientM [User]
+user  :: Int -> ClientM User
+
+users :<|> user = client (Proxy @UserAPI)
+```
+
+---
+
+class: center, middle, title-slide
+
+# ![Mu](images/sidebar-haskell.svg) Mu - `higherkindness.io/mu`
+
+---
+
+# gRPC service definition
+
+This is `helloworld.proto`, <br /> using Protocol Buffers syntax
+
+.code60[
+```protobuf
+package helloworld;
+
+message HelloRequest { string name = 1; }
+message HelloReply { string message = 1; }
+
+service Greeter {
+  rpc SayHello (HelloRequest)
+    returns (HelloReply) {}
+  rpc SayManyHellos (stream HelloRequest)
+    returns (stream HelloReply) {}
+}
+
+```
+]
+
+---
+
+# Import the service definition
+
+.code60[
+```haskell
+{-# language TemplateHaskell #-}
+
+grpc "Schema" (const "Service") "helloworld.proto"
+```
+]
+--
+
+Messages may be mapped to Haskell types
+
+.code60[
+```haskell
+data HelloRequestMessage = Req { name :: T.Text }
+  deriving (Eq, Show, Generic
+           , ToSchema   Schema "HelloRequest"
+           , FromSchema Schema "HelloRequest")
+
+data HelloReplyMessage = Reply { message :: T.Text }
+  deriving (Eq, Show, Generic
+           , ToSchema   Schema "HelloReply"
+           , FromSchema Schema "HelloReply")
+```
+]
+
+---
+
+# Define the server
+
+.code60[
+```haskell
+server = singleService
+  ( method @"SayHello" sayHello
+  , method @"SayManyHellos" sayManyHellos )
+  where
+    sayHello
+      :: HelloRequest -> ServerErrorIO HelloResponse
+    sayHello (HelloRequest nm)
+      = pure $ HelloResponse ("hi, " <> nm)
+    
+    sayManyHellos
+      :: ConduitT () HelloRequest m ()
+      -> ConduitT HelloResponse Void m ()
+      -> ServerErrorIO ()
+    sayManyHellos = ...
+```
+]
+
+---
+
+# One server, many protocols
+
+The same server can be exposed through different interfaces, _if compatible_
+
+.code70[
+```haskell
+runConcurrently $ (\_ _ _ -> ())
+  <$> c 50051 (gRpcApp msgProtoBuf server)
+  <*> c 50052 (gRpcApp msgAvro     server)
+  <*> c 50053 (graphQLApp server (Proxy @...))
+  where c port f = Concurrently (run port f)
+```
+]
+
+---
+
+class: center, middle, title-slide
+
+# ⚔️ Let the battle begin!
+
+.align-left[
+Focus #1: server definition <br />
+Focus #2: serialization <br />
+Focus #3: API representation
+]
+
+---
+
+class: center, middle, title-slide
+
+# ⚔️ Focus #1: server definition
+
+---
+
+# 🤖 ![Mu](images/sidebar-haskell.svg) The "handler monad"
+
+Both libraries use _simple functions_
+
+- arguments represent the inputs
+
+```haskell
+user :: Int -> Handler User
+user user_id = ...
+```
+
+- execute inside a similar monad
+
+```haskell
+type Handler = ExceptT ServerError IO
+```
+
+---
+
+# 🤖 ![Mu](images/sidebar-haskell.svg) The "handler monad"
+
+```haskell
+type Handler = ExceptT ServerError IO
+```
+
+From the Servant docs:
+
+.smaller[
+> [...] it is the simplest monad that:
+> - lets us both return a successful result (using `return`) or “fail” with an error (using `throwError`);
+> - lets us perform IO, which is absolutely vital since most webservices exist as interfaces to databases that we interact with in `IO`.
+]
+
+---
+
+# 🤖 ![Mu](images/sidebar-haskell.svg) Escaping out of the monad
+
+Using a natural transformation <br /> `forall x. f x -> g x`
+
+.code70[
+```haskell
+hoistServer
+  :: HasServer api '[] => Proxy api
+  -> (forall x. m x -> n x)
+  -> ServerT api m -> ServerT api n
+```
+
+```haskell
+runGRpcAppTrans
+  :: (...) => Proxy protocol -> Port
+  -> (forall a. m a -> ServerErrorIO a)
+  -> ServerT chn () pkg m handlers -> IO () 
+```
+]
+
+---
+
+# 🤖 Handlers in order
+
+---
+
+# ![Mu](images/sidebar-haskell.svg) Handlers out of order
+
+---
+
+class: center, middle, title-slide
+
+# ⚔️ Focus #2: serialization
+
+---
+
+# 🤖 Serialization
+
+## User perspective
+
+(Re)use different classes per content type
+
+- `From/ToHttpApiData` for text in URLs
+- `From/ToJSON` (from Aeson) for JSON
+
+---
+
+# 🤖 Serialization
+
+## Linking them together
+
+Via the `MimeRender` class and type-level names
+
+```haskell
+class MimeRender ctype a where
+    mimeRender
+      :: Proxy ctype -> a -> ByteString
+
+data JSON  -- empty data type
+instance ToJSON a => MimeRender JSON a ...
+```
+
+---
+
+# ![Mu](images/sidebar-haskell.svg) Serialization
+
+Use of an intermediate `Term` data type
+
+![Term conversion](images/conversion.png)
+
+---
+
+# ![Mu](images/sidebar-haskell.svg) Serialization
+
+Conversion is automatized using `GHC.Generics`
+
+.code70[
+```haskell
+data SchemaType = ...
+  deriving (Eq, Show, Generic
+           , ToSchema   Schema "SchemaType"
+           , FromSchema Schema "SchemaType")
+```
+]
+
+--
+
+🙈 `mu-schema` is _yet another_ generics library 
+
+--
+
+> &dash; The guy who co-wrote `generics-mrsop` and `kind-generics`
+
+---
+
+# 🤖 ⚔️ ![Mu](images/sidebar-haskell.svg) Serialization: comparison
+
+🤖 Need to manually derive each content type <br />
+![Mu](images/sidebar-haskell.svg) Only a single `From/ToSchema` is required
+
+--
+
+## ![Mu](images/sidebar-haskell.svg) Does one size fit all?
+
+.margin-top[
+👍 No (user) code to move to another protocol
+
+👎 Lack of configurability (e.g., JSON keys)
+
+👎 The `Term` data type is a "Frankenstein"
+   (some protocols support unions, others not...)
+
+]
+
+---
+
+# 🤖 HTML as the content type
+
+---
+
+class: center, middle, title-slide
+
+# ⚔️ Focus #3: API representation
+
+---
+
+class: center, middle, title-slide
+
+# 🤖 🤝 ![Mu](images/sidebar-haskell.svg)
+
+# Bridging both worlds
+
+# `mu-servant-server`
+
+---
+
+class: center, middle, title-slide
+
+# 🙋 Questions and comments
+
+---
+
+class: center, middle, title-slide
+
+# 🤩 It's been a pleasure
+
+## Enjoy the rest of BOB 2021!
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js">
+    </script>
+    <script>
+      var slideshow = remark.create();
+    </script>
+  </body>
+</html>
