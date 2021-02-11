@@ -546,9 +546,11 @@ type UserAPI
 
 --
 
+.less-line-height[
 👍 Easy to understand
 
 👎 Difficult to share, you need packages such as `servant-js`/`elm` to create clients
+]
 
 ---
 
@@ -650,6 +652,54 @@ class: center, middle, title-slide
 # Bridging both worlds
 
 # `mu-servant-server`
+
+---
+
+# 🤖 🤝 ![Mu](images/sidebar-haskell.svg) .remark-code[mu-servant-server]
+
+> Expose a Mu server as a Servant one
+
+Use the annotations machinery in Mu <br /> to "fill the gaps" about routes
+
+.code60[
+```haskell
+type instance AnnotatedPackage ServantRoute Service
+  = '[ 'AnnService "Greeter"
+          ('ServantTopLevelRoute '["greet"])
+     , 'AnnMethod "Greeter" "SayHello"
+          ('ServantRoute '["say", "hello"] 'POST 200)
+     ]
+```
+]
+
+---
+
+# 🤖 🤝 ![Mu](images/sidebar-haskell.svg) .remark-code[mu-servant-server]
+
+> Expose a Mu server as a Servant one
+
+A type family creates a Servant API type <br /> looking up those annotations
+
+```haskell
+PackageAPI Service handlers
+```
+
+The instances define what can be translated
+
+- Right now, only _one_ argument in the _body_
+
+---
+
+# 🤖 🤝 ![Mu](images/sidebar-haskell.svg) .remark-code[mu-servant-server]
+
+> Expose a Mu server as a Servant one
+
+## Help us bridging both worlds!
+
+.margin-top[
+- Import OpenAPI definitions in Mu
+- Support more complex Servant routes
+]
 
 ---
 
