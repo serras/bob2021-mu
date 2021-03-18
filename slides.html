@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Servant vs. Mu: A Type-Level Battle</title>
+    <title>Elixir and Haskell</title>
     <meta charset="utf-8">
     <style>
       /* @import url(https://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
@@ -16,9 +16,9 @@
 class: center, middle, title-slide
 count: false
 
-# Servant vs. Mu <br /> .grey[A Type-Level Battle]
+# .big-img[![Elixir](images/elixir.svg)]Elixir and .big-img[![Haskell](images/haskell.svg)]Haskell
 
-## Alejandro Serrano @ BOB 2021
+## Alejandro Serrano @ Functional Fest 2021
 
 .less-line-height[
 .grey[🐦 @trupill - 👨‍💻 47 Degrees (Academy)]
@@ -26,680 +26,493 @@ count: false
 
 ---
 
-# Servant and Mu
+# 👨‍💻 Who am I?
 
-Sets of libraries to develop services in Haskell
+.small-img[![Haskell](images/haskell.svg)]Haskell dev, currently at 47 Degrees
 
---
+.nested-list[.font80[
+- Member of the GHC Steering Committee
+- Maintainer of `mu` and `kind-generics`
+]]
 
-## 🤖 Servant - `servant.dev`
+👨‍🏫 PhD in (Functional) Programming Languages
 
-.margin-top[
-- Focus on web services: REST, OpenAPI
-- Both client and server
-]
+📚 _Practical Haskell_ and _The Book of Monads_
 
---
+.small-img[![Elixir](images/elixir.svg)]Learning Elixir since a few months
 
-## ![Mu](images/sidebar-haskell.svg) Mu - `higherkindness.io/mu`
-
-.margin-top[
-- Microservices, multi-protocol: gRPC, GraphQL
-- Preceded by a Scala sibling
-]
-
----
-
-# Why compare them?
-
-### Focus on a similar tech space
-
-.margin-top[
-- Choices for developing microservices
-- Even more when the protocol is still in flux
-]
-
---
-
-### Both use _type-level techniques_
-
-Using lots of GHC extensions, and some more
-
-- Interesting exploration of the design space
-- How much of this is exposed to the user?
-
----
-
-class: center, middle, title-slide
-
-# 👁️‍🗨️ Disclaimer
-
-## I am one of the core developers of Mu
-
----
-
-class: center, middle, title-slide
-
-# 🤖 Servant - `servant.dev`
-
----
-
-# Your API as a type
-
-.code80[
-```haskell
-type UserAPI
-  =    "users" :> Get '[JSON] [User]
-  :<|> "user"  :> Capture "user_id" Int
-               :> Get '[JSON] User 
-```
-]
-
-defines your API as two routes
-
-```
-GET /users
-GET /user/:user_id
-```
-
----
-
-# Serving the API
-
-.code50[
-```haskell
-type UserAPI
-  =    "users" :> Get '[JSON] [User]
-  :<|> "user"  :> Capture "user_id" Int
-               :> Get '[JSON] User 
-```
-]
-
-You provide a `Handler` per route
-
-.code70[
-```haskell
-server :: Server UserAPI
-server = users :<|> user
-  where users :: Handler [User]
-        users = ...
-        user :: Int -> Handler User
-        user user_id = ...
-```
-]
-
----
-
-# Serving the API
-
-.code70[
-```haskell
-server :: Server UserAPI
-server = users :<|> user
-  where users :: Handler [User]
-        users = ...
-        user :: Int -> Handler User
-        user user_id = ...
-```
-]
-
-`Handler` extends `IO` with the ability to stop
-
-```haskell
-type Handler = ExceptT ServerError IO
-```
-
----
-
-# Serving the API
-
-.code70[
-```haskell
-server :: Server UserAPI
-server = users :<|> user
-  where users :: Handler [User]
-        users = ...
-        user :: Int -> Handler User
-        user user_id = ...
-```
-]
-
-Serialization is handled by the library
-
-- From string to `Int` in a URL part
-- Using Aeson's `ToJSON` for `User`
-
----
-
-# Querying the API
-
-.code50[
-```haskell
-type UserAPI
-  =    "users" :> Get '[JSON] [User]
-  :<|> "user"  :> Capture "user_id" Int
-               :> Get '[JSON] User 
-```
-]
-
-Client code is automatically derived
-
-```haskell
-users :: ClientM [User]
-user  :: Int -> ClientM User
-
-users :<|> user = client (Proxy @UserAPI)
-```
-
----
-
-class: center, middle, title-slide
-
-# ![Mu](images/sidebar-haskell.svg) Mu - `higherkindness.io/mu`
-
----
-
-# gRPC service definition
-
-This is `helloworld.proto`, <br /> using Protocol Buffers syntax
-
-.code60[
-```protobuf
-package helloworld;
-
-message HelloRequest { string name = 1; }
-message HelloReply { string message = 1; }
-
-service Greeter {
-  rpc SayHello (HelloRequest)
-    returns (HelloReply) {}
-  rpc SayManyHellos (stream HelloRequest)
-    returns (stream HelloReply) {}
-}
-
-```
-]
-
----
-
-# Import the service definition
-
-.code60[
-```haskell
-{-# language TemplateHaskell #-}
-
-grpc "Schema" (const "Service") "helloworld.proto"
-```
-]
---
-
-Messages may be mapped to Haskell types
-
-.code60[
-```haskell
-data HelloRequestMessage = Req { name :: T.Text }
-  deriving (Eq, Show, Generic
-           , ToSchema   Schema "HelloRequest"
-           , FromSchema Schema "HelloRequest")
-
-data HelloReplyMessage = Reply { message :: T.Text }
-  deriving (Eq, Show, Generic
-           , ToSchema   Schema "HelloReply"
-           , FromSchema Schema "HelloReply")
-```
-]
-
----
-
-# Define the server
-
-.code60[
-```haskell
-server = singleService
-  ( method @"SayHello" sayHello
-  , method @"SayManyHellos" sayManyHellos )
-  where
-    sayHello
-      :: HelloRequest -> ServerErrorIO HelloResponse
-    sayHello (HelloRequest nm)
-      = pure $ HelloResponse ("hi, " <> nm)
-    
-    sayManyHellos
-      :: ConduitT () HelloRequest m ()
-      -> ConduitT HelloResponse Void m ()
-      -> ServerErrorIO ()
-    sayManyHellos = ...
-```
-]
-
----
-
-# One server, many protocols
-
-The same server can be exposed through different interfaces, _if compatible_
-
-.code70[
-```haskell
-runConcurrently $ (\_ _ _ -> ())
-  <$> c 50051 (gRpcApp msgProtoBuf server)
-  <*> c 50052 (gRpcApp msgAvro     server)
-  <*> c 50053 (graphQLApp server (Proxy @...))
-  where c port f = Concurrently (run port f)
-```
-]
-
----
-
-class: center, middle, title-slide
-
-# ⚔️ Let the battle begin!
-
-.align-left[
-Focus #1: server definition <br />
-Focus #2: serialization <br />
-Focus #3: API representation
-]
-
----
-
-class: center, middle, title-slide
-
-# ⚔️ Focus #1: server definition
-
----
-
-# 🤖 ![Mu](images/sidebar-haskell.svg) The "handler monad"
-
-Both libraries use _simple functions_
-
-- arguments represent the inputs
-
-```haskell
-user :: Int -> Handler User
-user user_id = ...
-```
-
-- execute inside a similar monad
-
-```haskell
-type Handler = ExceptT ServerError IO
-```
-
----
-
-# 🤖 ![Mu](images/sidebar-haskell.svg) The "handler monad"
-
-```haskell
-type Handler = ExceptT ServerError IO
-```
-
-From the Servant docs:
-
-.smaller[
-> [...] it is the simplest monad that:
-> - lets us both return a successful result (using `return`) or “fail” with an error (using `throwError`);
-> - lets us perform IO, which is absolutely vital since most webservices exist as interfaces to databases that we interact with in `IO`.
-]
-
----
-
-# 🤖 ![Mu](images/sidebar-haskell.svg) Escaping out of the monad
-
-Using a natural transformation <br /> `forall x. f x -> g x`
-
-.code70[
-```haskell
-hoistServer
-  :: HasServer api '[] => Proxy api
-  -> (forall x. m x -> n x)
-  -> ServerT api m -> ServerT api n
-```
-
-```haskell
-runGRpcAppTrans
-  :: (...) => Proxy protocol -> Port
-  -> (forall a. m a -> ServerErrorIO a)
-  -> ServerT chn () pkg m handlers -> IO () 
-```
-]
-
----
-
-# 🤖 Handlers in order
-
-Handlers in Servant must appear in the same order as they are defined
-
-.code70[
-```haskell
-type UserAPI
-  =    "users" :> Get '[JSON] [User]
-  :<|> "user"  :> Capture "user_id" Int
-               :> Get '[JSON] User 
-
-server :: Server UserAPI
-server = users :<|> user
-```
-]
-
----
-
-# ![Mu](images/sidebar-haskell.svg) Handlers out of order
-
-Use special functions and type-level strings to figure everything out
-
-```haskell
-server = singleService
-  ( method @"SayHello" sayHello
-  , method @"SayManyHellos" sayManyHellos )
-```
-
---
-
-Internally, this is translated to Servant-style
-
-- Do the "matching" only _once_ at compile-time
-
----
-
-# 🤖 ⚔️ ![Mu](images/sidebar-haskell.svg) Handler order: comparison
-
---
-
-## 🤖 Declaration order
-
-.less-line-height[
-👍 Compile time is decreased
-
-👎 Change in the API ⇒ less than trivial error
-]
-
---
-
-## ![Mu](images/sidebar-haskell.svg) Out of order, tagged with names
-
-.less-line-height[
-👍 Readability of the server
-
-🤏 Duplication of names in schema and code
-
-👎 Misuse of combinators ⇒ terrible error
-]
-
----
-
-class: center, middle, title-slide
-
-# ⚔️ Focus #2: serialization
-
----
-
-# 🤖 Serialization
-
-## User perspective
-
-(Re)use different classes per content type
-
-- `From/ToHttpApiData` for text in URLs
-- `From/ToJSON` (from Aeson) for JSON
-
----
-
-# 🤖 Serialization
-
-## Linking them together
-
-Via the `MimeRender` class and type-level names
-
-```haskell
-class MimeRender ctype a where
-    mimeRender
-      :: Proxy ctype -> a -> ByteString
-
-data JSON  -- empty data type
-instance ToJSON a => MimeRender JSON a ...
-```
-
----
-
-# ![Mu](images/sidebar-haskell.svg) Serialization
-
-Use of an intermediate `Term` data type
-
-![Term conversion](images/conversion.png)
-
----
-
-# ![Mu](images/sidebar-haskell.svg) Serialization
-
-Conversion is automatized using `GHC.Generics`
-
-.code70[
-```haskell
-data SchemaType = ...
-  deriving (Eq, Show, Generic
-           , ToSchema   Schema "SchemaType"
-           , FromSchema Schema "SchemaType")
-```
-]
-
---
-
-🙈 `mu-schema` is _yet another_ generics library 
-
---
-
-> &dash; The guy who co-wrote `generics-mrsop` and `kind-generics`
-
----
-
-# 🤖 ⚔️ ![Mu](images/sidebar-haskell.svg) Serialization: comparison
-
-🤖 Need to manually derive each content type <br />
-![Mu](images/sidebar-haskell.svg) Only a single `From/ToSchema` is required
-
---
-
-## ![Mu](images/sidebar-haskell.svg) Does one size fit all?
-
-.margin-top[
-👍 No (user) code to move to another protocol
-
-👎 Lack of configurability (e.g., JSON keys)
-
-👎 The `Term` data type is a "Frankenstein"
-   (some protocols support unions, others not...)
-
-]
-
----
-
-# 🤖 HTML as the content type
-
-Servant has integrations to produce HTML, <br />
-a common output of a web service
-
-- `servant-lucid`
-- `servant-blaze`
-
-Mu only focuses on data-returning services
-
----
-
-class: center, middle, title-slide
-
-# ⚔️ Focus #3: API representation
-
----
-
-# 🤖 Type as an API
-
-The programmer writes the type _manually_
-
-.code80[
-```haskell
-type UserAPI
-  =    "users" :> Get '[JSON] [User]
-  :<|> "user"  :> Capture "user_id" Int
-               :> Get '[JSON] User 
-```
-]
-
---
-
-.less-line-height[
-👍 Easy to understand
-
-👎 Difficult to share, you need packages such as `servant-js`/`elm` to create clients
-]
-
----
-
-# ![Mu](images/sidebar-haskell.svg) Import the service definition
-
-.code60[
-```haskell
-{-# language TemplateHaskell #-}
-
-grpc "Schema" (const "Service") "helloworld.proto"
-```
-]
-
---
-
-which results in schema definitions...
-
-.code50[
-```haskell
-type QuickstartSchema
-  = '[ 'DRecord "HelloRequest"
-                '[ 'FieldDef "name"    ('TPrimitive T.Text) ]
-     , 'DRecord "HelloResponse"
-                '[ 'FieldDef "message" ('TPrimitive T.Text) ] ]
-
-type instance AnnotatedSchema ProtoBufAnnotation QuickstartSchema
-  = '[ 'AnnField "HelloRequest"  "name"    ('ProtoBufId 1)
-     , 'AnnField "HelloResponse" "message" ('ProtoBufId 1) ]
-```
-]
-
----
-
-# ![Mu](images/sidebar-haskell.svg) Import the service definition
-
-.code60[
-```haskell
-{-# language TemplateHaskell #-}
-
-grpc "Schema" (const "Service") "helloworld.proto"
-```
-]
-
-... and service definitions
-
-.code50[
-```haskell
-type QuickstartService
-  = 'Service "Greeter"
-      '[ 'Method "SayHello" '[]
-        '[ 'ArgSingle 'Nothing '[]
-             ('FromSchema QuickstartSchema "HelloRequest") ]
-        ('RetSingle ('FromSchema QuickstartSchema "HelloResponse")) ]
-```
-]
-
-Way more complex than Servant!
-
----
-
-# ![Mu](images/sidebar-haskell.svg) Schema-first
-
-👍 Better for sharing across teams
-
-- Well-established gRPC and GraphQL clients
-
-👍 The schema/service definition API is hidden
-
-- We have changed it in every major release without changes to the examples
-
-👎 Inspectability and error reporting
-
----
-
-# 🤖 ⚔️ ![Mu](images/sidebar-haskell.svg) Single vs. multi-protocol
-
-🤖 Focus on HTTP-oriented protocols <br />
-![Mu](images/sidebar-haskell.svg) The same code for different protocols
-
---
-
-## ![Mu](images/sidebar-haskell.svg) Does one size fit all?
-
-.margin-top[.less-line-height[
-👍 No (user) code to move to another protocol
-
-👎 Hard to diagnose when this is not possible
-
-- RPC protocols differ way more than serialization formats
-
+.nested-list[.font80[
+- `patternr.dev` using Phoenix LiveView
 ]]
 
 ---
 
 class: center, middle, title-slide
 
-# 🤖 🤝 ![Mu](images/sidebar-haskell.svg)
+# 💞 Double bias
 
-# Bridging both worlds
+.margin-top[
+## Using Haskell since a decade, loving it
+]
 
-# `mu-servant-server`
+.margin-top[
+## Discovering Elixir and the OTP Platform
+]
 
 ---
 
-# 🤖 🤝 ![Mu](images/sidebar-haskell.svg) .remark-code[mu-servant-server]
+# Old vs. new
 
-> Expose a Mu server as a Servant one
+🧓 Haskell first appeared in 1990
 
-Use the annotations machinery in Mu <br /> to "fill the gaps" about routes
+.nested-list[
+- First Report in 1999, current from 2010
+- Started in academia, still very relevant
+- Slowly moving to industry in the last 10y. 
+]
+
+--
+
+🧒 Elixir first appeared in 2011
+
+.nested-list[
+- Built on top of the older BEAM Erlang VM
+- Lots of people moved from Ruby (and Rails)
+]
+
+---
+
+class: center, middle, title-slide
+
+# .big-img[![Elixir](images/elixir.svg)].big-img[![Haskell](images/haskell.svg)] TL;DR
+
+.margin-top[
+## Both are great **functional** languages
+]
+.margin-top[
+## with really different **ecosystems**
+]
+
+---
+
+class: center, middle, title-slide
+
+# .big-img[![Elixir](images/elixir.svg)]🤝.big-img[![Haskell](images/haskell.svg)] In full agreement
+
+---
+
+# Pattern matching
+
+Inspect and obtain data by its _shape_
+
+.code70[
+```haskell
+greet "night" _ = "Sleep well"
+greet timeOfDay Person { name = Name f _ }
+  = "Good " <> timeOfDay <> ", " <> first
+```
+
+```elixir
+def greet("night", _), do: "Sleep well"
+def greet(timeOfDay, %Person{name: %{first: f}}),
+  do: "Good #{timeOfDay}, #{f}"
+```
+]
+
+---
+
+# Focus on immutability
+
+We never mutate, we build new values
+
+.code70[
+```haskell
+oneYearMore p@Person { age }
+  = p { age = age + 1 }
+```
+
+```elixir
+def oneYearMore(p = %Person{age: a}) do
+  %{ p | age: a + 1 }
+end
+```
+]
+
+---
+
+# Pipelines with different flavor
+
+### .small-img[![Haskell](images/haskell.svg)] Point-free composition
 
 .code60[
 ```haskell
-type instance AnnotatedPackage ServantRoute Service
-  = '[ 'AnnService "Greeter"
-          ('ServantTopLevelRoute '["greet"])
-     , 'AnnMethod "Greeter" "SayHello"
-          ('ServantRoute '["say", "hello"] 'POST 200)
-     ]
+sumInverses
+  = sum . map (1 /)
+  . filter (/= 0)
+```
+]
+
+### .small-img[![Elixir](images/elixir.svg)] Pipe operator
+
+.code60[
+```elixir
+def sumInverses(data) do
+  data
+  |> Enum.filter(&(&1 != 0))
+  |> Enum.map(&(1 / &1))
+  |> Enum.sum()
+end
 ```
 ]
 
 ---
 
-# 🤖 🤝 ![Mu](images/sidebar-haskell.svg) .remark-code[mu-servant-server]
+# Higher-order functions
 
-> Expose a Mu server as a Servant one
+### .small-img[![Haskell](images/haskell.svg)] (Too?) terse
 
-A type family creates a Servant API type <br /> looking up those annotations
-
+.code60[
 ```haskell
-PackageAPI Service handlers
+sumInverses
+  = sum . map (1 /)        -- section
+  . filter (\x -> x /= 0)  -- lambda
 ```
+]
 
-The instances define what can be translated
+### .small-img[![Elixir](images/elixir.svg)] Really concise, or longer
 
-- Right now, only _one_ argument in the _body_
+.code60[
+```elixir
+def sumInverses(data) do
+  data
+  |> Enum.filter(&(&1 != 0))      # short
+  |> Enum.map(fn x -> 1 / x end)  # long
+  |> Enum.sum()
+end
+```
+]
 
 ---
 
-# 🤖 🤝 ![Mu](images/sidebar-haskell.svg) .remark-code[mu-servant-server]
+# Simple types
 
-> Expose a Mu server as a Servant one
+The general shape is similar: _structs_ + _sums_
 
-## Help us bridging both worlds!
+.code60[
+```haskell
+data Person = Person Name Age
+data Status = Ok Person
+            | Error [PersonValidationError] 
+```
 
-.margin-top[
-- Import OpenAPI definitions in Mu
-- Support more complex Servant routes
+```elixir
+defmodule Person do
+  @type t :: %Person{name: String.t(), age: integer}
+  defstruct [:name, :age]
+  @type status :: {:ok, Person.t()}
+                | {:error, list(Person.Error.t())}
+end
+```
 ]
+
+---
+
+# I miss polymorphism 😫
+
+Elixir has some amount in `@type`
+
+.code70[
+```elixir
+@type result(e, r) :: {:ok, r} | {:error, e}
+```
+]
+
+--
+
+But there's no such notion in function specs
+
+.code70[
+```haskell
+map :: (a -> b) -> [a] -> [b]
+```
+
+```elixir
+# taken from the docs
+@spec map(t(), (element() -> any())) :: list()
+```
+]
+
+---
+
+# I miss polymorphism 😫
+
+Dialyzer seems to have something similar
+
+.code70[
+```elixir
+@spec map(list(A), (A -> B)) :: list(B)
+```
+]
+
+--
+
+This catches wrong implementation
+
+.code70[
+```elixir
+def map([x | xs], _), do: [1 | map(xs, f)]
+```
+]
+
+--
+
+But when calling, `A` is taken as `any`! <br /> (sort of, I don't understand it fully)
+
+---
+
+class: center, middle, title-slide
+
+# .big-img[![Elixir](images/elixir.svg)]💭.big-img[![Haskell](images/haskell.svg)] Similar ideas
+
+---
+
+# Side effects
+
+### .small-img[![Haskell](images/haskell.svg)] Strict separation using `IO`
+
+.code60[
+```haskell
+do putStr "what is your name"
+   name <- getLine
+```
+]
+
+### .small-img[![Elixir](images/elixir.svg)] Softer separation
+
+.code60[
+```elixir
+def add(x, y) do
+  IO.inspect({x, y})
+  x + y
+end
+```
+]
+
+--
+
+Processes enforce borders
+
+---
+
+# Domain-specific languages (DSLs)
+
+Warp the language to the domain, <br /> not the other way around
+
+Similar _targets_ of many libraries:
+
+- Ecto and Esquelero for SQL queries
+- Phoenix and Lucid for HTML templating
+
+But very different _implementation_
+
+---
+
+# DSLs in Elixir
+
+## Macros
+
+Generate or transform code at compile-time
+
+.code70[
+```elixir
+# Ecto query
+from u in "users",
+  where: u.age > 18 or is_nil(u.email),
+  select: %{name: u.name, age: u.age}
+```
+]
+
+📖 _Metaprogramming Elixir_ by Chris McCord
+
+---
+
+# DSLs in Elixir
+
+## Sigils
+
+Small sub-language parsed at compile-time
+
+.code60[
+```elixir
+# regular expressions
+"HELLO" =~ ~r/hello/i
+```
+
+```elixir
+# Phoenix LiveView
+def render(assigns) do
+  ~L"""
+  Current temperature: <%= @temperature %>
+  """
+end
+```
+]
+
+---
+
+# DSLs in Haskell
+
+## Terse syntax + combinators
+
+Small functions which build expressions
+
+.code70[
+```haskell
+-- Esqueleto query
+select $
+from $ \p -> do
+where_ (p ^. PersonAge >=. just (val 18))
+return p
+```
+]
+
+📖 _The Fun of Programming_, <br /> &nbsp;&nbsp;&nbsp;&nbsp; edited by Gibbons and de Moor
+
+---
+
+# DSLs in Haskell
+
+## Type-level computation
+
+Use types to drive code generation
+
+.code70[
+```haskell
+# Servant
+type UserAPI = "users" :> Get '[JSON] [User]
+
+# derive client
+users = client (Proxy @UserAPI)
+```
+]
+
+📖 _Thinking with Types_ by Sandy Maguire
+
+---
+
+class: center, middle, title-slide
+
+# .big-img[![Elixir](images/elixir.svg)]💢.big-img[![Haskell](images/haskell.svg)] Different thoughts
+
+---
+
+# Higher-order abstractions
+
+Talk about similarities in containers/contexts
+
+.code70[
+```haskell
+class Functor f where
+  fmap :: (a -> b) -> f a -> f b
+
+instance Functor []
+instance Functor Maybe
+instance Functor Tree
+```
+]
+
+--
+
+#### .small-img[![Elixir](images/elixir.svg)] Not in the "common toolbox"
+
+Witchcraft in hex.pm 
+
+---
+
+# Errors and `with`
+
+A concise way to handle errors
+
+.nested-list[.font90[
+- If a match fails, the value is returned
+]]
+
+.code70[
+```elixir
+with {:ok, width}  <- Map.fetch(opts, :width),
+     {:ok, height} <- Map.fetch(opts, :height) do
+  {:ok, width * height}
+end
+```]
+
+--
+
+.small-img[![Haskell](images/haskell.svg)] `EarlyDo` by Chris Done
+
+.nested-list[.font90[
+- Wrapper around `m (Either e a)`
+]]
+
+---
+
+class: center, middle, title-slide
+
+# .big-img[![Elixir](images/elixir.svg)]🌐.big-img[![Haskell](images/haskell.svg)] Ecosystem
+
+---
+
+# Big or small?
+
+---
+
+# BEAM, OTP, telemetry
+
+---
+
+# Compile-time invariants
+
+---
+
+class: center, middle, title-slide
+
+# .big-img[![Elixir](images/elixir.svg)]👪.big-img[![Haskell](images/haskell.svg)] Why not?
+
+---
+
+# OTP Haskell?
+
+Laziness makes I/O complicated
+
+Untyped nature of messaging
+
+- Protocol could be part of the "type"
+- Gleam and Caramel provide some ideas
+
+--
+
+`thread-supervisor` provides some features
+
+.code70[
+```haskell
+type ActorHandler message result
+  = Inbox message -> IO result
+```
+]
+
+---
+
+# Typed Elixir?
+
+Macros are difficult to type
+
+- _Predictable Macros for Hindley-Milner_ <br /> gives us some hope
+
+Ideas for more powerful type systems
+
+- Dialyzer with refinement types?
+    - Also good for Erlang!
+- Gradual types as in Racket?
+    - _Type Systems as Macros_
 
 ---
 
@@ -713,7 +526,7 @@ class: center, middle, title-slide
 
 # 🤩 It's been a pleasure
 
-## Enjoy the rest of BOB 2021!
+## Feel free to ping me in Twitter!
 
     </textarea>
     <script src="https://remarkjs.com/downloads/remark-latest.min.js">

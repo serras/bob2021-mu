@@ -1,12 +1,13 @@
 @import url(https://fonts.googleapis.com/css?family=Fira+Sans:300,300i,400,400i,500,500i,700,700i);
 @import url(https://cdn.rawgit.com/tonsky/FiraCode/1.204/distr/fira_code.css);
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@200&display=swap');
 
 body {
   font-family: 'Fira Sans','Droid Serif', 'Palatino Linotype', 'Book Antiqua', Palatino, 'Microsoft YaHei', 'Songti SC', serif;
 }
 
 .remark-code, .remark-inline-code {
-  font-family: 'Fira Code', 'Lucida Console', Monaco, monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Lucida Console', Monaco, monospace;
   font-size: 80%;
 }
 
@@ -85,7 +86,7 @@ position: absolute;
 }
 
 .margin-top {
-  margin-top: 20px;
+  margin-top: 15px;
 }
 
 .less-line-height {
@@ -116,6 +117,15 @@ position: absolute;
 }
 .title-slide > h2  {
   margin-top: -25px;
+  padding-bottom: -20px;
+  color: #1A292C;
+  text-shadow: none;
+  font-weight: 300;
+  font-size: 40px;
+  text-align: left;
+  margin-left: 15px;
+}
+.title-slide > .margin-top > h2  {
   padding-bottom: -20px;
   color: #1A292C;
   text-shadow: none;
@@ -277,4 +287,29 @@ position: absolute;
 }
 .font200 {
   font-size: 200%;
+}
+
+.big-img {
+  width: 60px;
+  display: inline-block;
+  margin-bottom: 0px;
+}
+
+.big-img img {
+  margin-bottom: -12px;
+}
+
+.small-img {
+  width: 50px;
+  display: inline-block;
+  margin-bottom: 0px;
+}
+
+.small-img img {
+  margin-bottom: -12px;
+}
+
+.nested-list {
+  margin-top: -20px;
+  margin-left: 15px;
 }
