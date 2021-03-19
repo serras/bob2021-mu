@@ -388,10 +388,10 @@ Use types to drive code generation
 
 .code70[
 ```haskell
-# Servant
+-- Servant
 type UserAPI = "users" :> Get '[JSON] [User]
 
-# derive client
+-- derive client
 users = client (Proxy @UserAPI)
 ```
 ]
@@ -429,7 +429,7 @@ Witchcraft in hex.pm
 
 ---
 
-# Errors and `with`
+# Errors and .remark-code[with]
 
 A concise way to handle errors
 
@@ -463,13 +463,58 @@ class: center, middle, title-slide
 
 # Big or small?
 
+#### .small-img[![Elixir](images/elixir.svg)] Elixir has bigger pieces
+
+Often come with generators and tasks
+
+- ExUnit directly in `mix`
+- Phoenix, Absinthe
+
 ---
 
-# BEAM, OTP, telemetry
+# Big or small?
+
+#### .small-img[![Elixir](images/elixir.svg)] Elixir has bigger pieces
+
+#### .small-img[![Haskell](images/haskell.svg)] Haskell has smaller libraries
+
+Strong focus on _bring your own X_
+
+- Servant + your own database lib. <br /> + your own templating lib. + ...
+
+👻 Intimidating for beginners
 
 ---
 
-# Compile-time invariants
+# Elixir 💛 services
+
+The platform is just _awesome_ for services
+
+- BEAM and OTP for robustness and scalability
+- `telemetry` as a central point for events
+- Phoenix LiveDashboard shows this focus
+
+## On this point, Haskell is very far away
+
+---
+
+# Haskell 💜 compile-time checks
+
+Types help a lot with:
+
+- refactoring complex data shapes
+- checking for exhaustiveness
+
+Compilers, or similar data pipelines
+
+--
+
+## Checking for DSL invariants
+
+.margin-top[
+- Well-formed SQL queries
+- Type-safe deriving of JSON
+]
 
 ---
 
@@ -526,7 +571,7 @@ class: center, middle, title-slide
 
 # 🤩 It's been a pleasure
 
-## Feel free to ping me in Twitter!
+## Feel free to ping me .grey[@trupill]
 
     </textarea>
     <script src="https://remarkjs.com/downloads/remark-latest.min.js">
